@@ -8,16 +8,21 @@ query AnimeList($page: Int!, $perPage: Int!) {
     }
     media(type: ANIME, sort: POPULARITY_DESC) {
       id
-      episodes
-      status
-      averageScore
       title {
         romaji
         english
+        native
       }
       coverImage {
         large
+        medium
       }
+      episodes
+      season
+      seasonYear
+      status
+      format
+      averageScore
     }
   }
 }
