@@ -65,7 +65,10 @@ import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.anidex.AnimeListQuery
 import com.example.anidex.ApolloClientProvider
+import com.example.anidex.SearchAnimeQuery
 import com.example.anidex.navigation.AniDexRoutes
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val BackgroundColor = Color(0xFF050505)
@@ -105,6 +108,8 @@ fun AnimeScreen(navController: NavHostController) {
     var currentPage by remember { mutableIntStateOf(1) }
     var hasNextPage by remember { mutableStateOf(true) }
     var isLoadingMore by remember { mutableStateOf(false) }
+    var isSearching by remember { mutableStateOf(false) }
+    var searchJob by remember { mutableStateOf<Job?>(null) }
 
     val scope = rememberCoroutineScope()
 
@@ -174,6 +179,50 @@ fun AnimeScreen(navController: NavHostController) {
         return response.data?.Page?.pageInfo?.hasNextPage == true
     }
 
+    suspend fun searchAnimeByName(
+        query: String,
+        targetList: SnapshotStateList<AnimeCatalogItem>
+    ) {
+        val response = ApolloClientProvider.client
+            .query(
+                SearchAnimeQuery(
+                    page = 1,
+                    perPage = 20,
+                    search = query
+                )
+            )
+            .execute()
+
+        val mappedItems = response.data
+            ?.Page
+            ?.media
+            ?.filterNotNull()
+            ?.mapNotNull { media ->
+                val title = media.title?.english
+                    ?: media.title?.romaji
+                    ?: media.title?.native
+                    ?: return@mapNotNull null
+
+                val genres = media.genres
+                    ?.filterNotNull()
+                    ?: emptyList()
+
+                AnimeCatalogItem(
+                    id = media.id,
+                    title = title,
+                    imageUrl = media.coverImage?.large,
+                    episodes = media.episodes,
+                    score = media.averageScore,
+                    season = buildSeasonText(media.season?.name, media.seasonYear),
+                    genres = genres
+                )
+            }
+            ?: emptyList()
+
+        targetList.clear()
+        targetList.addAll(mappedItems)
+    }
+
     LaunchedEffect(Unit) {
         try {
             isLoading = true
@@ -191,17 +240,13 @@ fun AnimeScreen(navController: NavHostController) {
         }
     }
 
-    val filteredItems = animeItems.filter { anime ->
-        val matchesSearch = anime.title.contains(searchText, ignoreCase = true)
-
-        val matchesCategory = when (selectedCategory) {
+    val displayedItems = animeItems.filter { anime ->
+        when (selectedCategory) {
             "Trending" -> true
             else -> anime.genres.any { genre ->
                 genre.equals(selectedCategory, ignoreCase = true)
             }
         }
-
-        matchesSearch && matchesCategory
     }
 
     Scaffold(
@@ -273,7 +318,42 @@ fun AnimeScreen(navController: NavHostController) {
 
                 OutlinedTextField(
                     value = searchText,
-                    onValueChange = { searchText = it },
+                    onValueChange = { value ->
+                        searchText = value
+
+                        searchJob?.cancel()
+                        searchJob = scope.launch {
+                            delay(400)
+
+                            try {
+                                errorMessage = null
+
+                                if (searchText.isBlank()) {
+                                    isSearching = false
+                                    isLoading = true
+                                    hasNextPage = loadAnimePage(
+                                        page = 1,
+                                        targetList = animeItems,
+                                        replace = true
+                                    )
+                                    currentPage = 1
+                                    isLoading = false
+                                } else {
+                                    isSearching = true
+                                    isLoading = true
+                                    searchAnimeByName(
+                                        query = searchText.trim(),
+                                        targetList = animeItems
+                                    )
+                                    hasNextPage = false
+                                    isLoading = false
+                                }
+                            } catch (e: Exception) {
+                                errorMessage = e.message ?: "Unknown error"
+                                isLoading = false
+                            }
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = {
                         Text(
@@ -329,7 +409,7 @@ fun AnimeScreen(navController: NavHostController) {
                                 CircularProgressIndicator(color = PrimaryRed)
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "Loading anime...",
+                                    text = if (isSearching) "Searching anime..." else "Loading anime...",
                                     color = TextWhite
                                 )
                             }
@@ -358,7 +438,7 @@ fun AnimeScreen(navController: NavHostController) {
                             contentPadding = PaddingValues(bottom = 24.dp)
                         ) {
                             items(
-                                items = filteredItems,
+                                items = displayedItems,
                                 key = { it.id }
                             ) { anime ->
                                 AnimeCatalogCard(
@@ -370,7 +450,7 @@ fun AnimeScreen(navController: NavHostController) {
                             }
 
                             item {
-                                if (hasNextPage && !isLoadingMore && searchText.isBlank() && selectedCategory == "Trending") {
+                                if (hasNextPage && !isLoadingMore && !isSearching && selectedCategory == "Trending") {
                                     LoadMoreCard(
                                         onClick = {
                                             scope.launch {
