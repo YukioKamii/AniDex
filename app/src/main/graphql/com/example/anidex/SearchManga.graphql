@@ -1,18 +1,21 @@
-query SearchManga($search: String) {
-    Page(page: 1, perPage: 20) {
+query SearchManga($page: Int!, $perPage: Int!, $search: String!) {
+    Page(page: $page, perPage: $perPage) {
+        pageInfo {
+            hasNextPage
+        }
         media(type: MANGA, search: $search, sort: POPULARITY_DESC) {
             id
             title {
-                romaji
                 english
+                romaji
                 native
             }
             coverImage {
                 large
             }
-            averageScore
             chapters
             volumes
+            averageScore
             status
             genres
         }
