@@ -1,0 +1,23 @@
+query MangaList($page: Int!, $perPage: Int!) {
+    Page(page: $page, perPage: $perPage) {
+        pageInfo {
+            hasNextPage
+        }
+        media(type: MANGA, sort: POPULARITY_DESC) {
+            id
+            title {
+                english
+                romaji
+                native
+            }
+            coverImage {
+                large
+            }
+            chapters
+            volumes
+            averageScore
+            status
+            genres
+        }
+    }
+}

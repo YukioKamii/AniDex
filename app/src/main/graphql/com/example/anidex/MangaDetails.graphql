@@ -1,0 +1,21 @@
+query MangaDetails($id: Int) {
+    Media(id: $id, type: MANGA) {
+        id
+        title {
+            romaji
+            english
+            native
+        }
+        coverImage {
+            large
+            extraLarge
+        }
+        bannerImage
+        description(asHtml: false)
+        averageScore
+        chapters
+        volumes
+        status
+        genres
+    }
+}
