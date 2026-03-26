@@ -25,6 +25,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.anidex.ui.theme.AniDexTheme
+import com.example.anidex.screen.HomeScreen
+import androidx.activity.compose.setContent
+import androidx.navigation.compose.rememberNavController
+import com.example.anidex.navigation.AniDexNavHost
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,99 +36,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AniDexTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    AnimeListScreen(innerPadding)
-                }
+                val navController = rememberNavController()
+                AniDexNavHost(navController = navController)
             }
         }
     }
 }
 
-@Composable
-fun AnimeListScreen(innerPadding: PaddingValues) {
-    var animeTitles by remember { mutableStateOf<List<String>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(Unit) {
-        try {
-            val response = ApolloClientProvider.client
-                .query(
-                    AnimeListQuery(
-                        page = 1,
-                        perPage = 50
-                    )
-                )
-                .execute()
-
-            animeTitles = response.data
-                ?.Page
-                ?.media
-                ?.filterNotNull()
-                ?.mapNotNull { media ->
-                    media.title?.english ?: media.title?.romaji
-                }
-                ?: emptyList()
-
-            isLoading = false
-        } catch (e: Exception) {
-            errorMessage = e.message ?: "Une erreur inconnue est survenue"
-            isLoading = false
-        }
-    }
-
-    when {
-        isLoading -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                verticalArrangement = Arrangement.Center
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.padding(16.dp)
-                )
-                Text(
-                    text = "Chargement des animés...",
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-        }
-
-        errorMessage != null -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                Text(
-                    text = "Erreur : $errorMessage",
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-        }
-
-        else -> {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(animeTitles) { title ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = title,
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
