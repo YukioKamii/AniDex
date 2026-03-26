@@ -87,7 +87,7 @@ data class AnimeCatalogItem(
     val genres: List<String>
 )
 
-data class AnimeBottomNavItem(
+data class AnimeScreenBottomNavItem(
     val label: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val route: String
@@ -119,11 +119,11 @@ fun AnimeScreen(navController: NavHostController) {
     )
 
     val navItems = listOf(
-        AnimeBottomNavItem("Anime", Icons.Default.PlayArrow, AniDexRoutes.ANIME),
-        AnimeBottomNavItem("Manga", Icons.Default.Book, AniDexRoutes.MANGA),
-        AnimeBottomNavItem("Accueil", Icons.Default.Home, AniDexRoutes.HOME),
-        AnimeBottomNavItem("Favoris", Icons.Default.Favorite, AniDexRoutes.FAVORITES),
-        AnimeBottomNavItem("Profil", Icons.Default.Person, AniDexRoutes.PROFILE)
+        AnimeScreenBottomNavItem("Anime", Icons.Default.PlayArrow, AniDexRoutes.ANIME),
+        AnimeScreenBottomNavItem("Manga", Icons.Default.Book, AniDexRoutes.MANGA),
+        AnimeScreenBottomNavItem("Accueil", Icons.Default.Home, AniDexRoutes.HOME),
+        AnimeScreenBottomNavItem("Favoris", Icons.Default.Favorite, AniDexRoutes.FAVORITES),
+        AnimeScreenBottomNavItem("Profil", Icons.Default.Person, AniDexRoutes.PROFILE)
     )
 
     suspend fun loadAnimePage(
@@ -364,7 +364,7 @@ fun AnimeScreen(navController: NavHostController) {
                                 AnimeCatalogCard(
                                     anime = anime,
                                     onClick = {
-                                        // navController.navigate("anime_details/${anime.id}")
+                                        navController.navigate("${AniDexRoutes.ANIME_DETAIL}/${anime.id}")
                                     }
                                 )
                             }
