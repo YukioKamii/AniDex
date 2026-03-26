@@ -25,12 +25,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -62,7 +65,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.anidex.navigation.AniDexRoutes
 
 private val BackgroundColor = Color(0xFF050505)
@@ -75,25 +77,8 @@ private val TextGray = Color(0xFF9A9A9A)
 private val MutedBorder = Color(0xFF232323)
 private val SearchBg = Color(0xFF1C1C1C)
 
-data class ProfileBottomNavItem(
-    val label: String,
-    val icon: ImageVector,
-    val route: String
-)
-
 @Composable
 fun ProfileScreen(navController: NavHostController) {
-    val navItems = listOf(
-        ProfileBottomNavItem("Anime", Icons.Default.PlayArrow, AniDexRoutes.ANIME),
-        ProfileBottomNavItem("Manga", Icons.Default.Book, AniDexRoutes.MANGA),
-        ProfileBottomNavItem("Accueil", Icons.Default.Home, AniDexRoutes.HOME),
-        ProfileBottomNavItem("Favoris", Icons.Default.Favorite, AniDexRoutes.FAVORITES),
-        ProfileBottomNavItem("Profil", Icons.Default.Person, AniDexRoutes.PROFILE)
-    )
-
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
-
     var displayName by rememberSaveable { mutableStateOf("Tung Sahur") }
     var username by rememberSaveable { mutableStateOf("@tung_anidex") }
     var bio by rememberSaveable {
@@ -105,6 +90,7 @@ fun ProfileScreen(navController: NavHostController) {
 
     var showEditDialog by rememberSaveable { mutableStateOf(false) }
     var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
+    var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         containerColor = BackgroundColor,
@@ -115,36 +101,47 @@ fun ProfileScreen(navController: NavHostController) {
                 tonalElevation = 0.dp,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
             ) {
-                navItems.forEach { item ->
-                    NavigationBarItem(
-                        selected = currentRoute == item.route,
-                        onClick = {
-                            navController.navigate(item.route) {
-                                launchSingleTop = true
-                                restoreState = true
-                                popUpTo(navController.graph.startDestinationId) {
-                                    saveState = true
-                                }
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = item.label
-                            )
-                        },
-                        label = {
-                            Text(text = item.label, maxLines = 1)
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = TextWhite,
-                            selectedTextColor = TextWhite,
-                            unselectedIconColor = SoftGray,
-                            unselectedTextColor = SoftGray,
-                            indicatorColor = PrimaryRed
-                        )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { navController.navigate(AniDexRoutes.ANIME) },
+                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Anime") },
+                    label = { Text("Anime") }
+                )
+
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { navController.navigate(AniDexRoutes.MANGA) },
+                    icon = { Icon(Icons.Default.Book, contentDescription = "Manga") },
+                    label = { Text("Manga") }
+                )
+
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { navController.navigate(AniDexRoutes.HOME) },
+                    icon = { Icon(Icons.Default.Home, contentDescription = "Accueil") },
+                    label = { Text("Accueil") }
+                )
+
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { navController.navigate(AniDexRoutes.FAVORITES) },
+                    icon = { Icon(Icons.Default.Favorite, contentDescription = "Favoris") },
+                    label = { Text("Favoris") }
+                )
+
+                NavigationBarItem(
+                    selected = true,
+                    onClick = { navController.navigate(AniDexRoutes.PROFILE) },
+                    icon = { Icon(Icons.Default.Person, contentDescription = "Profil") },
+                    label = { Text("Profil") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = TextWhite,
+                        selectedTextColor = TextWhite,
+                        unselectedIconColor = SoftGray,
+                        unselectedTextColor = SoftGray,
+                        indicatorColor = PrimaryRed
                     )
-                }
+                )
             }
         }
     ) { innerPadding ->
@@ -288,6 +285,12 @@ fun ProfileScreen(navController: NavHostController) {
                     onClick = { showSettingsDialog = true }
                 )
 
+                Spacer(modifier = Modifier.height(28.dp))
+
+                LogoutButton(
+                    onClick = { showLogoutDialog = true }
+                )
+
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
@@ -299,10 +302,10 @@ fun ProfileScreen(navController: NavHostController) {
             currentUsername = username,
             currentBio = bio,
             onDismiss = { showEditDialog = false },
-            onSave = { newName, newUsername, newBio ->
-                displayName = newName
-                username = if (newUsername.startsWith("@")) newUsername else "@$newUsername"
-                bio = newBio
+            onSave = { name, user, bioText ->
+                displayName = name
+                username = if (user.startsWith("@")) user else "@$user"
+                bio = bioText
                 showEditDialog = false
             }
         )
@@ -315,6 +318,19 @@ fun ProfileScreen(navController: NavHostController) {
             onDismiss = { showSettingsDialog = false },
             onDarkThemeChange = { darkThemeEnabled = it },
             onNotificationsChange = { notificationsEnabled = it }
+        )
+    }
+
+    if (showLogoutDialog) {
+        LogoutDialog(
+            onDismiss = { showLogoutDialog = false },
+            onConfirm = {
+                showLogoutDialog = false
+                navController.navigate(AniDexRoutes.HOME) {
+                    popUpTo(AniDexRoutes.PROFILE) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
         )
     }
 }
@@ -604,6 +620,77 @@ fun SettingsCard(
             )
         }
     }
+}
+
+@Composable
+fun LogoutButton(
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = PrimaryRed,
+            contentColor = TextWhite
+        )
+    ) {
+        Icon(
+            imageVector = Icons.Default.ExitToApp,
+            contentDescription = "Déconnexion",
+            modifier = Modifier.size(20.dp)
+        )
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Text(
+            text = "Se déconnecter",
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun LogoutDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardColor,
+        title = {
+            Text(
+                text = "Déconnexion",
+                color = TextWhite,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = "Veux-tu vraiment te déconnecter ?",
+                color = SoftGray
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = "Se déconnecter",
+                    color = PrimaryRed,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Annuler",
+                    color = SoftGray
+                )
+            }
+        }
+    )
 }
 
 @Composable
