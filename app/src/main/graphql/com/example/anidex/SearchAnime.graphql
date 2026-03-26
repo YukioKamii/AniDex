@@ -1,0 +1,28 @@
+query SearchAnime($search: String!, $page: Int!, $perPage: Int!) {
+    Page(page: $page, perPage: $perPage) {
+        pageInfo {
+            currentPage
+            perPage
+            lastPage
+            hasNextPage
+        }
+        media(type: ANIME, search: $search, sort: SEARCH_MATCH) {
+            id
+            title {
+                romaji
+                english
+                native
+            }
+            coverImage {
+                medium
+                large
+            }
+            episodes
+            season
+            seasonYear
+            status
+            format
+            averageScore
+        }
+    }
+}

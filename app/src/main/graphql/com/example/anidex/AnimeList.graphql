@@ -1,0 +1,28 @@
+query AnimeList($page: Int!, $perPage: Int!) {
+  Page(page: $page, perPage: $perPage) {
+    pageInfo {
+      currentPage
+      perPage
+      lastPage
+      hasNextPage
+    }
+    media(type: ANIME, sort: POPULARITY_DESC) {
+      id
+      title {
+        romaji
+        english
+        native
+      }
+      coverImage {
+        large
+        medium
+      }
+      episodes
+      season
+      seasonYear
+      status
+      format
+      averageScore
+    }
+  }
+}
