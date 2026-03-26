@@ -25,12 +25,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -87,6 +90,7 @@ fun ProfileScreen(navController: NavHostController) {
 
     var showEditDialog by rememberSaveable { mutableStateOf(false) }
     var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
+    var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         containerColor = BackgroundColor,
@@ -281,6 +285,12 @@ fun ProfileScreen(navController: NavHostController) {
                     onClick = { showSettingsDialog = true }
                 )
 
+                Spacer(modifier = Modifier.height(28.dp))
+
+                LogoutButton(
+                    onClick = { showLogoutDialog = true }
+                )
+
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
@@ -308,6 +318,19 @@ fun ProfileScreen(navController: NavHostController) {
             onDismiss = { showSettingsDialog = false },
             onDarkThemeChange = { darkThemeEnabled = it },
             onNotificationsChange = { notificationsEnabled = it }
+        )
+    }
+
+    if (showLogoutDialog) {
+        LogoutDialog(
+            onDismiss = { showLogoutDialog = false },
+            onConfirm = {
+                showLogoutDialog = false
+                navController.navigate(AniDexRoutes.HOME) {
+                    popUpTo(AniDexRoutes.PROFILE) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
         )
     }
 }
@@ -597,6 +620,77 @@ fun SettingsCard(
             )
         }
     }
+}
+
+@Composable
+fun LogoutButton(
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = PrimaryRed,
+            contentColor = TextWhite
+        )
+    ) {
+        Icon(
+            imageVector = Icons.Default.ExitToApp,
+            contentDescription = "Déconnexion",
+            modifier = Modifier.size(20.dp)
+        )
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Text(
+            text = "Se déconnecter",
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun LogoutDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardColor,
+        title = {
+            Text(
+                text = "Déconnexion",
+                color = TextWhite,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = "Veux-tu vraiment te déconnecter ?",
+                color = SoftGray
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = "Se déconnecter",
+                    color = PrimaryRed,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Annuler",
+                    color = SoftGray
+                )
+            }
+        }
+    )
 }
 
 @Composable
