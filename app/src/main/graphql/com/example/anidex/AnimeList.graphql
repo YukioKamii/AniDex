@@ -6,7 +6,7 @@ query AnimeList($page: Int!, $perPage: Int!) {
       lastPage
       hasNextPage
     }
-    media(type: ANIME, sort: POPULARITY_DESC) {
+    media(type: ANIME, sort: TRENDING_DESC) {
       id
       title {
         romaji
@@ -23,6 +23,7 @@ query AnimeList($page: Int!, $perPage: Int!) {
       status
       format
       averageScore
+      genres
     }
   }
 }
