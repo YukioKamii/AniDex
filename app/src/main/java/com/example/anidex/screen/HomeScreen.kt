@@ -62,6 +62,9 @@ import androidx.navigation.NavHostController
 import com.example.anidex.R
 import com.example.anidex.navigation.AniDexRoutes
 import kotlinx.coroutines.delay
+import coil.compose.AsyncImage
+import com.example.anidex.ApolloClientProvider
+import com.example.anidex.AnimeListQuery
 
 private val BackgroundColor = Color(0xFF050505)
 private val CardColor = Color(0xFF141414)
@@ -73,8 +76,10 @@ private val TextGray = Color(0xFF9A9A9A)
 private val SearchBg = Color(0xFF1C1C1C)
 
 data class TrendingItem(
+    val id: Int,
     val title: String,
-    val subtitle: String
+    val subtitle: String,
+    val imageUrl: String?
 )
 
 data class BottomNavItem(
@@ -88,13 +93,58 @@ fun HomeScreen(navController: NavHostController) {
     var searchText by remember { mutableStateOf("") }
     val selectedIndex = 2
 
-    val trendingItems = listOf(
-        TrendingItem("Solo Leveling", "Action • Fantasy"),
-        TrendingItem("Frieren", "Adventure • Fantasy"),
-        TrendingItem("Blue Lock", "Sport • Shonen"),
-        TrendingItem("Jujutsu Kaisen", "Action • Supernatural"),
-        TrendingItem("One Piece", "Adventure • Shonen")
-    )
+    var trendingItems by remember { mutableStateOf<List<TrendingItem>>(emptyList()) }
+    var isLoadingTrending by remember { mutableStateOf(true) }
+    var trendingError by remember { mutableStateOf<String?>(null) }
+
+
+    LaunchedEffect(Unit) {
+        try {
+            val response = ApolloClientProvider.client
+                .query(
+                    AnimeListQuery(
+                        page = 1,
+                        perPage = 10
+                    )
+                )
+                .execute()
+
+            trendingItems = response.data
+                ?.Page
+                ?.media
+                ?.filterNotNull()
+                ?.mapNotNull { media ->
+                    val title = media.title?.english
+                        ?: media.title?.romaji
+                        ?: media.title?.native
+                        ?: return@mapNotNull null
+
+                    val genres = media.genres
+                        ?.filterNotNull()
+                        ?.take(2)
+                        ?: emptyList()
+
+                    val subtitle = if (genres.isNotEmpty()) {
+                        genres.joinToString(" • ")
+                    } else {
+                        "Unknown"
+                    }
+
+                    TrendingItem(
+                        id = media.id,
+                        title = title,
+                        subtitle = subtitle,
+                        imageUrl = media.coverImage?.large
+                    )
+                }
+                ?: emptyList()
+
+            isLoadingTrending = false
+        } catch (e: Exception) {
+            trendingError = e.message ?: "Unknown error"
+            isLoadingTrending = false
+        }
+    }
 
     val navItems = listOf(
         BottomNavItem("Anime", Icons.Default.PlayArrow, AniDexRoutes.ANIME),
@@ -179,8 +229,26 @@ fun HomeScreen(navController: NavHostController) {
                     )
                 }
 
-                items(trendingItems) { item ->
-                    TrendingCard(item = item)
+                if (isLoadingTrending) {
+                    item {
+                        Text(
+                            text = "Loading trending anime...",
+                            color = TextWhite,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else if (trendingError != null) {
+                    item {
+                        Text(
+                            text = "Error: $trendingError",
+                            color = PrimaryRed,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else {
+                    items(trendingItems) { item ->
+                        TrendingCard(item = item)
+                    }
                 }
 
                 item {
@@ -426,22 +494,14 @@ fun TrendingCard(item: TrendingItem) {
                 .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            AsyncImage(
+                model = item.imageUrl,
+                contentDescription = item.title,
                 modifier = Modifier
                     .size(44.dp)
-                    .background(
-                        color = PrimaryRed,
-                        shape = RoundedCornerShape(8.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "IMG",
-                    color = TextWhite,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Crop
+            )
 
             Spacer(modifier = Modifier.width(12.dp))
 
