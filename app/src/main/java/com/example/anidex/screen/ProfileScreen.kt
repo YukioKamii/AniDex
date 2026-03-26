@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -38,13 +39,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,8 +59,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.anidex.navigation.AniDexRoutes
 
 private val BackgroundColor = Color(0xFF050505)
@@ -64,6 +73,7 @@ private val SoftGray = Color(0xFFD6D9D2)
 private val TextWhite = Color(0xFFF7F7F7)
 private val TextGray = Color(0xFF9A9A9A)
 private val MutedBorder = Color(0xFF232323)
+private val SearchBg = Color(0xFF1C1C1C)
 
 data class ProfileBottomNavItem(
     val label: String,
@@ -81,7 +91,20 @@ fun ProfileScreen(navController: NavHostController) {
         ProfileBottomNavItem("Profil", Icons.Default.Person, AniDexRoutes.PROFILE)
     )
 
-    var selectedIndex by remember { mutableIntStateOf(4) }
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+
+    var displayName by rememberSaveable { mutableStateOf("Tung Sahur") }
+    var username by rememberSaveable { mutableStateOf("@tung_anidex") }
+    var bio by rememberSaveable {
+        mutableStateOf("Passionné d’anime et de manga, toujours à la recherche de nouvelles pépites ✨")
+    }
+
+    var darkThemeEnabled by rememberSaveable { mutableStateOf(true) }
+    var notificationsEnabled by rememberSaveable { mutableStateOf(true) }
+
+    var showEditDialog by rememberSaveable { mutableStateOf(false) }
+    var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         containerColor = BackgroundColor,
@@ -92,13 +115,16 @@ fun ProfileScreen(navController: NavHostController) {
                 tonalElevation = 0.dp,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
             ) {
-                navItems.forEachIndexed { index, item ->
+                navItems.forEach { item ->
                     NavigationBarItem(
-                        selected = selectedIndex == index,
+                        selected = currentRoute == item.route,
                         onClick = {
-                            selectedIndex = index
                             navController.navigate(item.route) {
                                 launchSingleTop = true
+                                restoreState = true
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
+                                }
                             }
                         },
                         icon = {
@@ -149,7 +175,13 @@ fun ProfileScreen(navController: NavHostController) {
                     modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
                 )
 
-                ProfileHeaderCard()
+                ProfileHeaderCard(
+                    displayName = displayName,
+                    username = username,
+                    bio = bio,
+                    onEditClick = { showEditDialog = true },
+                    onSettingsClick = { showSettingsDialog = true }
+                )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -250,16 +282,53 @@ fun ProfileScreen(navController: NavHostController) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                SettingsCard()
+                SettingsCard(
+                    darkThemeEnabled = darkThemeEnabled,
+                    notificationsEnabled = notificationsEnabled,
+                    onClick = { showSettingsDialog = true }
+                )
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
+
+    if (showEditDialog) {
+        EditProfileDialog(
+            currentName = displayName,
+            currentUsername = username,
+            currentBio = bio,
+            onDismiss = { showEditDialog = false },
+            onSave = { newName, newUsername, newBio ->
+                displayName = newName
+                username = if (newUsername.startsWith("@")) newUsername else "@$newUsername"
+                bio = newBio
+                showEditDialog = false
+            }
+        )
+    }
+
+    if (showSettingsDialog) {
+        SettingsDialog(
+            darkThemeEnabled = darkThemeEnabled,
+            notificationsEnabled = notificationsEnabled,
+            onDismiss = { showSettingsDialog = false },
+            onDarkThemeChange = { darkThemeEnabled = it },
+            onNotificationsChange = { notificationsEnabled = it }
+        )
+    }
 }
 
 @Composable
-fun ProfileHeaderCard() {
+fun ProfileHeaderCard(
+    displayName: String,
+    username: String,
+    bio: String,
+    onEditClick: () -> Unit,
+    onSettingsClick: () -> Unit
+) {
+    val initial = displayName.firstOrNull()?.uppercase() ?: "A"
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -284,7 +353,7 @@ fun ProfileHeaderCard() {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "T",
+                    text = initial,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = TextWhite
@@ -294,24 +363,26 @@ fun ProfileHeaderCard() {
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                text = "Tung Sahur",
+                text = displayName,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.ExtraBold,
                 color = TextWhite
             )
 
             Text(
-                text = "@tung_anidex",
+                text = username,
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextGray,
                 modifier = Modifier.padding(top = 4.dp)
             )
 
             Text(
-                text = "Passionné d’anime et de manga, toujours à la recherche de nouvelles pépites ✨",
+                text = bio,
                 style = MaterialTheme.typography.bodyMedium,
                 color = SoftGray,
-                modifier = Modifier.padding(top = 12.dp)
+                modifier = Modifier.padding(top = 12.dp),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -321,12 +392,14 @@ fun ProfileHeaderCard() {
             ) {
                 ProfileActionChip(
                     icon = Icons.Default.Edit,
-                    label = "Modifier"
+                    label = "Modifier",
+                    onClick = onEditClick
                 )
 
                 ProfileActionChip(
                     icon = Icons.Default.Settings,
-                    label = "Réglages"
+                    label = "Réglages",
+                    onClick = onSettingsClick
                 )
             }
         }
@@ -336,7 +409,8 @@ fun ProfileHeaderCard() {
 @Composable
 fun ProfileActionChip(
     icon: ImageVector,
-    label: String
+    label: String,
+    onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -344,7 +418,7 @@ fun ProfileActionChip(
                 color = Color(0xFF1C1C1C),
                 shape = RoundedCornerShape(50)
             )
-            .clickable { }
+            .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -480,9 +554,20 @@ fun ActivityCard(
 }
 
 @Composable
-fun SettingsCard() {
+fun SettingsCard(
+    darkThemeEnabled: Boolean,
+    notificationsEnabled: Boolean,
+    onClick: () -> Unit
+) {
+    val summary = buildList {
+        add(if (darkThemeEnabled) "Thème sombre activé" else "Thème sombre désactivé")
+        add(if (notificationsEnabled) "Notifications activées" else "Notifications désactivées")
+    }.joinToString(" • ")
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = CardColor)
     ) {
@@ -513,10 +598,212 @@ fun SettingsCard() {
             )
 
             Text(
-                text = "Thème sombre activé • Notifications personnalisées • Synchronisation AniDex",
+                text = summary,
                 color = SoftGray,
                 style = MaterialTheme.typography.bodySmall
             )
         }
+    }
+}
+
+@Composable
+fun EditProfileDialog(
+    currentName: String,
+    currentUsername: String,
+    currentBio: String,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String) -> Unit
+) {
+    var editedName by remember(currentName) { mutableStateOf(currentName) }
+    var editedUsername by remember(currentUsername) { mutableStateOf(currentUsername.removePrefix("@")) }
+    var editedBio by remember(currentBio) { mutableStateOf(currentBio) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardColor,
+        title = {
+            Text(
+                text = "Modifier le profil",
+                color = TextWhite,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ProfileDialogTextField(
+                    value = editedName,
+                    onValueChange = { editedName = it },
+                    label = "Nom affiché"
+                )
+
+                ProfileDialogTextField(
+                    value = editedUsername,
+                    onValueChange = { editedUsername = it },
+                    label = "Pseudo"
+                )
+
+                ProfileDialogTextField(
+                    value = editedBio,
+                    onValueChange = { editedBio = it },
+                    label = "Bio",
+                    singleLine = false,
+                    minLines = 3
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(
+                        editedName.trim().ifEmpty { currentName },
+                        editedUsername.trim().ifEmpty { currentUsername.removePrefix("@") },
+                        editedBio.trim().ifEmpty { currentBio }
+                    )
+                }
+            ) {
+                Text(
+                    text = "Enregistrer",
+                    color = PrimaryRed,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Annuler",
+                    color = SoftGray
+                )
+            }
+        }
+    )
+}
+
+@Composable
+fun ProfileDialogTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    singleLine: Boolean = true,
+    minLines: Int = 1
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.fillMaxWidth(),
+        label = {
+            Text(text = label, color = TextGray)
+        },
+        singleLine = singleLine,
+        minLines = minLines,
+        shape = RoundedCornerShape(16.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = SearchBg,
+            unfocusedContainerColor = SearchBg,
+            disabledContainerColor = SearchBg,
+            focusedBorderColor = PrimaryRed,
+            unfocusedBorderColor = MutedBorder,
+            cursorColor = PrimaryRed,
+            focusedTextColor = TextWhite,
+            unfocusedTextColor = TextWhite,
+            focusedLabelColor = PrimaryRed,
+            unfocusedLabelColor = TextGray
+        )
+    )
+}
+
+@Composable
+fun SettingsDialog(
+    darkThemeEnabled: Boolean,
+    notificationsEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onDarkThemeChange: (Boolean) -> Unit,
+    onNotificationsChange: (Boolean) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardColor,
+        title = {
+            Text(
+                text = "Réglages",
+                color = TextWhite,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                SettingsSwitchRow(
+                    title = "Thème sombre",
+                    subtitle = "Conserver l’interface sombre de l’application",
+                    checked = darkThemeEnabled,
+                    onCheckedChange = onDarkThemeChange
+                )
+
+                SettingsSwitchRow(
+                    title = "Notifications",
+                    subtitle = "Recevoir les nouveautés et rappels AniDex",
+                    checked = notificationsEnabled,
+                    onCheckedChange = onNotificationsChange
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Fermer",
+                    color = PrimaryRed,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    )
+}
+
+@Composable
+fun SettingsSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = title,
+                color = TextWhite,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = subtitle,
+                color = TextGray,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = TextWhite,
+                checkedTrackColor = PrimaryRed,
+                uncheckedThumbColor = SoftGray,
+                uncheckedTrackColor = Color(0xFF2A2A2A)
+            )
+        )
     }
 }
