@@ -22,12 +22,13 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavHostController
 import androidx.compose.ui.unit.dp
+import com.example.anidex.data.local.session.UserSessionManager
 import com.example.anidex.navigation.AniDexRoutes
 
 private val BackgroundColor = Color(0xFF050505)
@@ -38,6 +39,33 @@ private val TextWhite = Color(0xFFF7F7F7)
 
 @Composable
 fun FavoritesScreen(navController: NavHostController) {
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sessionManager = remember { UserSessionManager(context) }
+
+    var showDialog by remember { mutableStateOf(false) }
+    val isLoggedIn = sessionManager.getCurrentUserId() != null
+
+    // 🔥 Popup si pas connecté
+    LaunchedEffect(Unit) {
+        if (!isLoggedIn) {
+            showDialog = true
+        }
+    }
+
+    if (showDialog && !isLoggedIn) {
+        AuthRequiredDialog(
+            title = "Connexion requise",
+            message = "Connecte-toi pour accéder à tes favoris ❤",
+            onDismiss = {
+                navController.popBackStack()
+            },
+            onLoginClick = {
+                navController.navigate(AniDexRoutes.AUTH)
+            }
+        )
+    }
+
     Scaffold(
         containerColor = BackgroundColor,
         contentWindowInsets = WindowInsets.systemBars,
@@ -67,7 +95,7 @@ fun FavoritesScreen(navController: NavHostController) {
                 )
                 NavigationBarItem(
                     selected = true,
-                    onClick = { navController.navigate(AniDexRoutes.FAVORITES) },
+                    onClick = {},
                     icon = { Icon(Icons.Default.Favorite, contentDescription = "Favoris") },
                     label = { Text("Favoris") },
                     colors = NavigationBarItemDefaults.colors(
@@ -87,24 +115,30 @@ fun FavoritesScreen(navController: NavHostController) {
             }
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(BackgroundColor)
-                .padding(innerPadding),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "PAGE FAVORIS",
-                color = TextWhite,
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Text(
-                text = "Écran temporaire en attendant le vrai contenu",
-                color = SoftGray,
-                style = MaterialTheme.typography.bodyMedium
-            )
+
+        if (isLoggedIn) {
+            // 👉 PLUS TARD : vraie liste favoris
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BackgroundColor)
+                    .padding(innerPadding),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "MES FAVORIS ❤",
+                    color = TextWhite,
+                    style = MaterialTheme.typography.headlineMedium
+                )
+            }
+        } else {
+            // écran vide derrière popup
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BackgroundColor)
+            ) {}
         }
     }
 }

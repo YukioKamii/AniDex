@@ -51,21 +51,31 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.example.anidex.data.local.database.DatabaseProvider
+import com.example.anidex.data.local.entity.HistoryEntity
+import com.example.anidex.data.local.entity.UserEntity
+import com.example.anidex.data.local.session.UserSessionManager
 import com.example.anidex.navigation.AniDexRoutes
+import kotlinx.coroutines.launch
 
 private val BackgroundColor = Color(0xFF050505)
 private val CardColor = Color(0xFF141414)
@@ -79,18 +89,42 @@ private val SearchBg = Color(0xFF1C1C1C)
 
 @Composable
 fun ProfileScreen(navController: NavHostController) {
-    var displayName by rememberSaveable { mutableStateOf("Tung Sahur") }
-    var username by rememberSaveable { mutableStateOf("@tung_anidex") }
-    var bio by rememberSaveable {
-        mutableStateOf("Passionné d’anime et de manga, toujours à la recherche de nouvelles pépites ✨")
-    }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val database = remember { DatabaseProvider.getDatabase(context) }
+    val userDao = remember { database.userDao() }
+    val favoriteDao = remember { database.favoriteDao() }
+    val historyDao = remember { database.historyDao() }
+    val sessionManager = remember { UserSessionManager(context) }
+    val scope = rememberCoroutineScope()
 
-    var darkThemeEnabled by rememberSaveable { mutableStateOf(true) }
-    var notificationsEnabled by rememberSaveable { mutableStateOf(true) }
-
+    var currentUserId by remember { mutableStateOf(sessionManager.getCurrentUserId()) }
     var showEditDialog by rememberSaveable { mutableStateOf(false) }
     var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
+    var showAuthDialog by rememberSaveable { mutableStateOf(false) }
+
+    val user by if (currentUserId != null) {
+        userDao.observeUserById(currentUserId!!).collectAsState(initial = null)
+    } else {
+        remember { mutableStateOf<UserEntity?>(null) }
+    }
+
+    val favoritesCount by if (currentUserId != null) {
+        favoriteDao.countFavorites(currentUserId!!).collectAsState(initial = 0)
+    } else {
+        remember { mutableIntStateOf(0) }
+    }
+
+    val recentHistory by if (currentUserId != null) {
+        historyDao.getRecentHistoryByUser(currentUserId!!, 3).collectAsState(initial = emptyList())
+    } else {
+        remember { mutableStateOf(emptyList<HistoryEntity>()) }
+    }
+
+    LaunchedEffect(Unit) {
+        currentUserId = sessionManager.getCurrentUserId()
+        showAuthDialog = currentUserId == null
+    }
 
     Scaffold(
         containerColor = BackgroundColor,
@@ -131,7 +165,7 @@ fun ProfileScreen(navController: NavHostController) {
 
                 NavigationBarItem(
                     selected = true,
-                    onClick = { navController.navigate(AniDexRoutes.PROFILE) },
+                    onClick = {},
                     icon = { Icon(Icons.Default.Person, contentDescription = "Profil") },
                     label = { Text("Profil") },
                     colors = NavigationBarItemDefaults.colors(
@@ -149,189 +183,438 @@ fun ProfileScreen(navController: NavHostController) {
             modifier = Modifier.fillMaxSize(),
             color = BackgroundColor
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(innerPadding)
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (currentUserId == null || user == null) {
+                    LockedProfileContent(innerPadding = innerPadding)
+                } else {
+                    val currentUser = user!!
 
-                Text(
-                    text = "Profil",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = TextWhite
-                )
-
-                Text(
-                    text = "Ton espace personnel AniDex",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextGray,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
-                )
-
-                ProfileHeaderCard(
-                    displayName = displayName,
-                    username = username,
-                    bio = bio,
-                    onEditClick = { showEditDialog = true },
-                    onSettingsClick = { showSettingsDialog = true }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = "Statistiques",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = TextWhite
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    StatCard(
-                        title = "Anime vus",
-                        value = "128",
-                        icon = Icons.Default.PlayArrow,
-                        gradientColors = listOf(Color(0xFFFF4B5C), Color(0xFFB3122D)),
-                        modifier = Modifier.weight(1f)
+                    ProfileConnectedContent(
+                        innerPadding = innerPadding,
+                        user = currentUser,
+                        favoritesCount = favoritesCount,
+                        recentHistory = recentHistory,
+                        onEditClick = { showEditDialog = true },
+                        onSettingsClick = { showSettingsDialog = true },
+                        onLogoutClick = { showLogoutDialog = true }
                     )
 
-                    StatCard(
-                        title = "Favoris",
-                        value = "24",
-                        icon = Icons.Default.Favorite,
-                        gradientColors = listOf(Color(0xFF1F1F1F), Color(0xFF111111)),
-                        modifier = Modifier.weight(1f)
-                    )
+                    if (showEditDialog) {
+                        EditProfileDialog(
+                            currentName = currentUser.displayName,
+                            currentUsername = currentUser.username,
+                            currentBio = currentUser.bio,
+                            onDismiss = { showEditDialog = false },
+                            onSave = { name, userName, bioText ->
+                                scope.launch {
+                                    userDao.updateProfile(
+                                        userId = currentUser.id,
+                                        displayName = name,
+                                        username = if (userName.startsWith("@")) userName else "@$userName",
+                                        bio = bioText,
+                                        darkThemeEnabled = currentUser.darkThemeEnabled,
+                                        notificationsEnabled = currentUser.notificationsEnabled
+                                    )
+
+                                    historyDao.insertHistory(
+                                        HistoryEntity(
+                                            userId = currentUser.id,
+                                            title = "Profil mis à jour",
+                                            type = "PROFILE",
+                                            actionType = "UPDATED_PROFILE",
+                                            details = "Modification du profil utilisateur"
+                                        )
+                                    )
+                                }
+                                showEditDialog = false
+                            }
+                        )
+                    }
+
+                    if (showSettingsDialog) {
+                        SettingsDialog(
+                            darkThemeEnabled = currentUser.darkThemeEnabled,
+                            notificationsEnabled = currentUser.notificationsEnabled,
+                            onDismiss = { showSettingsDialog = false },
+                            onDarkThemeChange = { darkTheme ->
+                                scope.launch {
+                                    userDao.updateProfile(
+                                        userId = currentUser.id,
+                                        displayName = currentUser.displayName,
+                                        username = currentUser.username,
+                                        bio = currentUser.bio,
+                                        darkThemeEnabled = darkTheme,
+                                        notificationsEnabled = currentUser.notificationsEnabled
+                                    )
+
+                                    historyDao.insertHistory(
+                                        HistoryEntity(
+                                            userId = currentUser.id,
+                                            title = "Réglages mis à jour",
+                                            type = "PROFILE",
+                                            actionType = "UPDATED_SETTINGS",
+                                            details = "Modification des préférences du compte"
+                                        )
+                                    )
+                                }
+                            },
+                            onNotificationsChange = { notifications ->
+                                scope.launch {
+                                    userDao.updateProfile(
+                                        userId = currentUser.id,
+                                        displayName = currentUser.displayName,
+                                        username = currentUser.username,
+                                        bio = currentUser.bio,
+                                        darkThemeEnabled = currentUser.darkThemeEnabled,
+                                        notificationsEnabled = notifications
+                                    )
+
+                                    historyDao.insertHistory(
+                                        HistoryEntity(
+                                            userId = currentUser.id,
+                                            title = "Réglages mis à jour",
+                                            type = "PROFILE",
+                                            actionType = "UPDATED_SETTINGS",
+                                            details = "Modification des préférences du compte"
+                                        )
+                                    )
+                                }
+                            }
+                        )
+                    }
+
+                    if (showLogoutDialog) {
+                        LogoutDialog(
+                            onDismiss = { showLogoutDialog = false },
+                            onConfirm = {
+                                scope.launch {
+                                    historyDao.insertHistory(
+                                        HistoryEntity(
+                                            userId = currentUser.id,
+                                            title = "Déconnexion",
+                                            type = "PROFILE",
+                                            actionType = "LOGOUT",
+                                            details = "Déconnexion du compte ${currentUser.username}"
+                                        )
+                                    )
+                                }
+
+                                sessionManager.logout()
+                                currentUserId = null
+                                showLogoutDialog = false
+                                showAuthDialog = false
+
+                                navController.navigate(AniDexRoutes.HOME) {
+                                    popUpTo(AniDexRoutes.PROFILE) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            }
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    StatCard(
-                        title = "Mangas lus",
-                        value = "56",
-                        icon = Icons.Default.Bookmark,
-                        gradientColors = listOf(Color(0xFFFF7A18), Color(0xFFAF002D)),
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    StatCard(
-                        title = "En cours",
-                        value = "9",
-                        icon = Icons.Default.Person,
-                        gradientColors = listOf(Color(0xFF2C2C2C), Color(0xFF191919)),
-                        modifier = Modifier.weight(1f)
+                if (showAuthDialog && currentUserId == null) {
+                    AuthRequiredDialog(
+                        title = "Connexion requise",
+                        message = "Connecte-toi pour accéder à ton profil AniDex, sauvegarder tes infos, suivre ton activité et retrouver tes favoris.",
+                        onDismiss = {
+                            showAuthDialog = false
+                            navController.popBackStack()
+                        },
+                        onLoginClick = {
+                            showAuthDialog = false
+                            navController.navigate(AniDexRoutes.AUTH)
+                        }
                     )
                 }
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                Text(
-                    text = "Activité récente",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = TextWhite
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ActivityCard(
-                    title = "Solo Leveling",
-                    subtitle = "Épisode 9 regardé",
-                    accentColor = PrimaryRed
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ActivityCard(
-                    title = "Blue Lock",
-                    subtitle = "Ajouté aux favoris",
-                    accentColor = Color(0xFFFF7A18)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ActivityCard(
-                    title = "Frieren",
-                    subtitle = "Mise à jour de la progression",
-                    accentColor = Color(0xFFD6D9D2)
-                )
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                Text(
-                    text = "Paramètres",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = TextWhite
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                SettingsCard(
-                    darkThemeEnabled = darkThemeEnabled,
-                    notificationsEnabled = notificationsEnabled,
-                    onClick = { showSettingsDialog = true }
-                )
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                LogoutButton(
-                    onClick = { showLogoutDialog = true }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
+}
 
-    if (showEditDialog) {
-        EditProfileDialog(
-            currentName = displayName,
-            currentUsername = username,
-            currentBio = bio,
-            onDismiss = { showEditDialog = false },
-            onSave = { name, user, bioText ->
-                displayName = name
-                username = if (user.startsWith("@")) user else "@$user"
-                bio = bioText
-                showEditDialog = false
-            }
+@Composable
+private fun LockedProfileContent(
+    innerPadding: androidx.compose.foundation.layout.PaddingValues
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(innerPadding)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .graphicsLayer { alpha = 0.35f }
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Profil",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = TextWhite
         )
+
+        Text(
+            text = "Ton espace personnel AniDex",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextGray,
+            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+        )
+
+        ProfileHeaderCard(
+            displayName = "Compte invité",
+            username = "@anidex_guest",
+            bio = "Connecte-toi pour sauvegarder ton profil, tes préférences et toute ton activité AniDex.",
+            onEditClick = {},
+            onSettingsClick = {}
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Statistiques",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextWhite
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            StatCard(
+                title = "Anime vus",
+                value = "--",
+                icon = Icons.Default.PlayArrow,
+                gradientColors = listOf(Color(0xFFFF4B5C), Color(0xFFB3122D)),
+                modifier = Modifier.weight(1f)
+            )
+
+            StatCard(
+                title = "Favoris",
+                value = "--",
+                icon = Icons.Default.Favorite,
+                gradientColors = listOf(Color(0xFF1F1F1F), Color(0xFF111111)),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            StatCard(
+                title = "Mangas lus",
+                value = "--",
+                icon = Icons.Default.Bookmark,
+                gradientColors = listOf(Color(0xFFFF7A18), Color(0xFFAF002D)),
+                modifier = Modifier.weight(1f)
+            )
+
+            StatCard(
+                title = "En cours",
+                value = "--",
+                icon = Icons.Default.Person,
+                gradientColors = listOf(Color(0xFF2C2C2C), Color(0xFF191919)),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text(
+            text = "Activité récente",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextWhite
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ActivityCard(
+            title = "Connexion requise",
+            subtitle = "Ton activité apparaîtra ici une fois connecté",
+            accentColor = PrimaryRed
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text(
+            text = "Paramètres",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextWhite
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        SettingsCard(
+            darkThemeEnabled = true,
+            notificationsEnabled = true,
+            onClick = {}
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        LogoutButton(onClick = {})
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
+}
 
-    if (showSettingsDialog) {
-        SettingsDialog(
-            darkThemeEnabled = darkThemeEnabled,
-            notificationsEnabled = notificationsEnabled,
-            onDismiss = { showSettingsDialog = false },
-            onDarkThemeChange = { darkThemeEnabled = it },
-            onNotificationsChange = { notificationsEnabled = it }
+@Composable
+private fun ProfileConnectedContent(
+    innerPadding: androidx.compose.foundation.layout.PaddingValues,
+    user: UserEntity,
+    favoritesCount: Int,
+    recentHistory: List<HistoryEntity>,
+    onEditClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onLogoutClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(innerPadding)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Profil",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = TextWhite
         )
-    }
 
-    if (showLogoutDialog) {
-        LogoutDialog(
-            onDismiss = { showLogoutDialog = false },
-            onConfirm = {
-                showLogoutDialog = false
-                navController.navigate(AniDexRoutes.HOME) {
-                    popUpTo(AniDexRoutes.PROFILE) { inclusive = true }
-                    launchSingleTop = true
-                }
+        Text(
+            text = "Ton espace personnel AniDex",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextGray,
+            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+        )
+
+        ProfileHeaderCard(
+            displayName = user.displayName,
+            username = user.username,
+            bio = user.bio,
+            onEditClick = onEditClick,
+            onSettingsClick = onSettingsClick
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Statistiques",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextWhite
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            StatCard(
+                title = "Anime vus",
+                value = recentHistory.count { it.type == "ANIME" }.toString(),
+                icon = Icons.Default.PlayArrow,
+                gradientColors = listOf(Color(0xFFFF4B5C), Color(0xFFB3122D)),
+                modifier = Modifier.weight(1f)
+            )
+
+            StatCard(
+                title = "Favoris",
+                value = favoritesCount.toString(),
+                icon = Icons.Default.Favorite,
+                gradientColors = listOf(Color(0xFF1F1F1F), Color(0xFF111111)),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            StatCard(
+                title = "Mangas lus",
+                value = recentHistory.count { it.type == "MANGA" }.toString(),
+                icon = Icons.Default.Bookmark,
+                gradientColors = listOf(Color(0xFFFF7A18), Color(0xFFAF002D)),
+                modifier = Modifier.weight(1f)
+            )
+
+            StatCard(
+                title = "En cours",
+                value = recentHistory.size.toString(),
+                icon = Icons.Default.Person,
+                gradientColors = listOf(Color(0xFF2C2C2C), Color(0xFF191919)),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text(
+            text = "Activité récente",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextWhite
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (recentHistory.isEmpty()) {
+            ActivityCard(
+                title = "Aucune activité",
+                subtitle = "Ton activité apparaîtra ici au fil de ton utilisation",
+                accentColor = PrimaryRed
+            )
+        } else {
+            recentHistory.forEach { history ->
+                ActivityCard(
+                    title = history.title,
+                    subtitle = history.details ?: history.actionType,
+                    accentColor = when (history.type) {
+                        "ANIME" -> PrimaryRed
+                        "MANGA" -> Color(0xFFFF7A18)
+                        else -> SoftGray
+                    }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
             }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Paramètres",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextWhite
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        SettingsCard(
+            darkThemeEnabled = user.darkThemeEnabled,
+            notificationsEnabled = user.notificationsEnabled,
+            onClick = onSettingsClick
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        LogoutButton(onClick = onLogoutClick)
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -809,6 +1092,9 @@ fun SettingsDialog(
     onDarkThemeChange: (Boolean) -> Unit,
     onNotificationsChange: (Boolean) -> Unit
 ) {
+    var localDarkTheme by remember(darkThemeEnabled) { mutableStateOf(darkThemeEnabled) }
+    var localNotifications by remember(notificationsEnabled) { mutableStateOf(notificationsEnabled) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardColor,
@@ -826,15 +1112,21 @@ fun SettingsDialog(
                 SettingsSwitchRow(
                     title = "Thème sombre",
                     subtitle = "Conserver l’interface sombre de l’application",
-                    checked = darkThemeEnabled,
-                    onCheckedChange = onDarkThemeChange
+                    checked = localDarkTheme,
+                    onCheckedChange = {
+                        localDarkTheme = it
+                        onDarkThemeChange(it)
+                    }
                 )
 
                 SettingsSwitchRow(
                     title = "Notifications",
                     subtitle = "Recevoir les nouveautés et rappels AniDex",
-                    checked = notificationsEnabled,
-                    onCheckedChange = onNotificationsChange
+                    checked = localNotifications,
+                    onCheckedChange = {
+                        localNotifications = it
+                        onNotificationsChange(it)
+                    }
                 )
             }
         },

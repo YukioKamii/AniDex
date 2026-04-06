@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.example.anidex.screen.AnimeDetailScreen
 import com.example.anidex.screen.AnimeScreen
+import com.example.anidex.screen.AuthScreen
 import com.example.anidex.screen.FavoritesScreen
 import com.example.anidex.screen.HomeScreen
 import com.example.anidex.screen.MangaScreen
@@ -19,6 +20,7 @@ object AniDexRoutes {
     const val MANGA = "manga"
     const val FAVORITES = "favorites"
     const val PROFILE = "profile"
+    const val AUTH = "auth"
     const val ANIME_DETAIL = "anime_detail"
 }
 
@@ -60,6 +62,10 @@ fun AniDexNavHost(navController: NavHostController) {
 
         composable(AniDexRoutes.PROFILE) {
             ProfileScreen(navController = navController)
+        }
+
+        composable(AniDexRoutes.AUTH) {
+            AuthScreen(navController = navController)
         }
     }
 }
