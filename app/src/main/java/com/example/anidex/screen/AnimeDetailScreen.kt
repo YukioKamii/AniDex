@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +64,12 @@ import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.anidex.AnimeDetailsQuery
 import com.example.anidex.ApolloClientProvider
+import com.example.anidex.data.local.database.DatabaseProvider
+import com.example.anidex.data.local.entity.FavoriteEntity
+import com.example.anidex.data.local.entity.HistoryEntity
+import com.example.anidex.data.local.session.UserSessionManager
 import com.example.anidex.navigation.AniDexRoutes
+import kotlinx.coroutines.launch
 
 private val DetailBackgroundColor = Color(0xFF050505)
 private val DetailCardColor = Color(0xFF141414)
@@ -118,9 +125,19 @@ fun AnimeDetailScreen(
     navController: NavHostController,
     animeId: Int
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val database = remember { DatabaseProvider.getDatabase(context) }
+    val favoriteDao = remember { database.favoriteDao() }
+    val historyDao = remember { database.historyDao() }
+    val sessionManager = remember { UserSessionManager(context) }
+    val scope = rememberCoroutineScope()
+
     var anime by remember { mutableStateOf<AnimeDetailUiModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isFavorite by remember { mutableStateOf(false) }
+    var showAuthDialog by remember { mutableStateOf(false) }
+    var currentUserId by remember { mutableStateOf(sessionManager.getCurrentUserId()) }
 
     val navItems = listOf(
         AnimeDetailBottomNavItem("Anime", Icons.Default.PlayArrow, AniDexRoutes.ANIME),
@@ -134,6 +151,7 @@ fun AnimeDetailScreen(
         try {
             isLoading = true
             errorMessage = null
+            currentUserId = sessionManager.getCurrentUserId()
 
             val response = ApolloClientProvider.client
                 .query(AnimeDetailsQuery(id = animeId))
@@ -202,6 +220,14 @@ fun AnimeDetailScreen(
                         }
                         ?: emptyList()
                 )
+
+                if (currentUserId != null) {
+                    isFavorite = favoriteDao.isFavorite(
+                        userId = currentUserId!!,
+                        mediaId = animeId,
+                        type = "ANIME"
+                    )
+                }
             }
         } catch (e: Exception) {
             errorMessage = e.message ?: "Erreur inconnue"
@@ -333,6 +359,84 @@ fun AnimeDetailScreen(
                                 Icon(
                                     imageVector = Icons.Default.ArrowBack,
                                     contentDescription = "Retour",
+                                    tint = DetailTextWhite
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    val userId = sessionManager.getCurrentUserId()
+
+                                    if (userId == null) {
+                                        showAuthDialog = true
+                                    } else {
+                                        scope.launch {
+                                            if (isFavorite) {
+                                                favoriteDao.deleteFavorite(
+                                                    userId = userId,
+                                                    mediaId = animeData.id,
+                                                    type = "ANIME"
+                                                )
+
+                                                historyDao.insertHistory(
+                                                    HistoryEntity(
+                                                        userId = userId,
+                                                        mediaId = animeData.id,
+                                                        title = animeData.title,
+                                                        imageUrl = animeData.coverImage,
+                                                        type = "ANIME",
+                                                        actionType = "UNFAVORITED",
+                                                        details = "Retiré des favoris"
+                                                    )
+                                                )
+
+                                                isFavorite = false
+                                            } else {
+                                                favoriteDao.insertFavorite(
+                                                    FavoriteEntity(
+                                                        userId = userId,
+                                                        mediaId = animeData.id,
+                                                        title = animeData.title,
+                                                        imageUrl = animeData.coverImage,
+                                                        type = "ANIME",
+                                                        subtitle = buildSeasonText(animeData.season, animeData.seasonYear),
+                                                        score = animeData.averageScore,
+                                                        episodes = animeData.episodes,
+                                                        seasonOrStatus = animeData.status,
+                                                        genres = animeData.genres
+                                                    )
+                                                )
+
+                                                historyDao.insertHistory(
+                                                    HistoryEntity(
+                                                        userId = userId,
+                                                        mediaId = animeData.id,
+                                                        title = animeData.title,
+                                                        imageUrl = animeData.coverImage,
+                                                        type = "ANIME",
+                                                        actionType = "FAVORITED",
+                                                        details = "Ajouté aux favoris"
+                                                    )
+                                                )
+
+                                                isFavorite = true
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .padding(end = 16.dp, top = 16.dp)
+                                    .windowInsetsPadding(WindowInsets.statusBars)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isFavorite) DetailPrimaryRed.copy(alpha = 0.95f)
+                                        else Color.Black.copy(alpha = 0.45f)
+                                    )
+                                    .align(Alignment.TopEnd)
+                            ) {
+                                Icon(
+                                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = "Favori",
                                     tint = DetailTextWhite
                                 )
                             }
@@ -558,6 +662,18 @@ fun AnimeDetailScreen(
                         }
                     }
                 }
+            }
+
+            if (showAuthDialog) {
+                AuthRequiredDialog(
+                    title = "Connexion requise",
+                    message = "Connecte-toi pour ajouter cet anime à tes favoris et retrouver ta collection dans ton profil AniDex.",
+                    onDismiss = { showAuthDialog = false },
+                    onLoginClick = {
+                        showAuthDialog = false
+                        navController.navigate(AniDexRoutes.AUTH)
+                    }
+                )
             }
         }
     }
